@@ -42,13 +42,13 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 {/* Back Button */}
                 <div className="mb-8">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+                        className="inline-flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
                     >
                         <ArrowLeftIcon className="w-4 h-4" />
                         <span className="text-sm font-medium">Back to Home</span>
@@ -56,16 +56,16 @@ export default function LoginPage() {
                 </div>
 
                 {/* Main Card */}
-                <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="bg-gray-800 rounded-2xl shadow-xl p-8">
                     {/* Header */}
                     <div className="text-center mb-8">
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl mb-6">
                             <span className="text-white text-2xl font-bold">S</span>
                         </div>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                        <h1 className="text-3xl font-bold text-white mb-2">
                             Welcome to SuiMeet
                         </h1>
-                        <p className="text-gray-500">
+                        <p className="text-gray-300">
                             Connect your wallet to start creating secure, decentralized meetings
                         </p>
                     </div>
@@ -76,9 +76,9 @@ export default function LoginPage() {
                         <button
                             onClick={handleZkLogin}
                             disabled={isZkLoading}
-                            className="w-full group relative overflow-hidden bg-white border-2 border-gray-300 rounded-xl p-4 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full group relative overflow-hidden bg-gray-700 border-2 border-gray-600 rounded-xl p-4 hover:bg-gray-600 hover:border-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center gap-4">
                                 <div className="flex-shrink-0 w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center group-hover:bg-red-100 transition-colors">
                                     {isZkLoading ? (
                                         <UpdateIcon className="w-6 h-6 text-red-500 animate-spin" />
@@ -86,13 +86,10 @@ export default function LoginPage() {
                                         <GlobeIcon className="w-6 h-6 text-red-500" />
                                     )}
                                 </div>
-                                <div className="flex-grow text-left">
-                                    <h3 className="font-semibold text-gray-900 mb-1">
-                                        {isZkLoading ? 'Connecting...' : 'Continue with Google'}
+                                <div className="text-left">
+                                    <h3 className="font-semibold text-white mb-1">
+                                        {'Continue with Google'}
                                     </h3>
-                                </div>
-                                <div className="flex-shrink-0">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                                 </div>
                             </div>
                         </button>
@@ -100,9 +97,9 @@ export default function LoginPage() {
                         {/* Wallet Connect Button */}
                         <ConnectModal
                             trigger={
-                                <button >
-                                    <div className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl p-4">
-                                        <div className="flex items-center gap-4">
+                                <button className="w-full">
+                                    <div className="w-full border-2 border-gray-600 rounded-xl p-4 bg-gray-700 hover:bg-gray-600 transition-colors">
+                                        <div className="flex items-center gap-4 justify-center text-white">
                                             Connect Wallet
                                         </div>
                                     </div>
@@ -121,8 +118,8 @@ export default function LoginPage() {
                     )}
 
                     {/* Features Preview */}
-                    <div className="space-y-4 pt-6 border-t border-gray-100">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                    <div className="space-y-4 pt-6 border-t border-gray-700">
+                        <h4 className="text-sm font-semibold text-white mb-3">
                             What you'll get:
                         </h4>
                         <div className="space-y-3">
@@ -131,8 +128,8 @@ export default function LoginPage() {
                                     <LockClosedIcon className="w-4 h-4 text-blue-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-gray-900">Secure Meetings</p>
-                                    <p className="text-xs text-gray-500">End-to-end encrypted with blockchain security</p>
+                                    <p className="text-sm font-medium text-white">Secure Meetings</p>
+                                    <p className="text-xs text-gray-400">End-to-end encrypted with blockchain security</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -140,8 +137,8 @@ export default function LoginPage() {
                                     <LightningBoltIcon className="w-4 h-4 text-cyan-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-gray-900">NFT Attendance Badges</p>
-                                    <p className="text-xs text-gray-500">Mint POAPs for meeting participation</p>
+                                    <p className="text-sm font-medium text-white">NFT Attendance Badges</p>
+                                    <p className="text-xs text-gray-400">Mint POAPs for meeting participation</p>
                                 </div>
                             </div>
                         </div>
