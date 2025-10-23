@@ -6,7 +6,8 @@ import { getFullnodeUrl } from '@mysten/sui.js/client';
 import { Theme } from '@radix-ui/themes';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WalletContextProvider } from '@/context/WalletContext';
+import { LoadingProvider } from '@/context/LoadingContext';
+import { AuthProvider } from '@/context/AuthContext';
 
 
 
@@ -41,11 +42,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
                         enableUnsafeBurner={process.env.NODE_ENV === 'development'}
                         storageKey="sui-meet-wallet"
                     >
-                        <WalletContextProvider>
-                            <Theme>
-                                {children}
-                            </Theme>
-                        </WalletContextProvider>
+                        <AuthProvider>
+                            <LoadingProvider>
+                                <Theme>
+                                    {children}
+                                </Theme>
+                            </LoadingProvider>
+                        </AuthProvider>
                     </WalletProvider>
                 </SuiClientProvider>
             </QueryClientProvider>

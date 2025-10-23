@@ -1,13 +1,10 @@
 'use client'
 
-import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 
 export default function HomePage() {
-  const { isConnected } = useWallet();
-  let connect = () => {
-
-  }
+  const { isAuthenticated, address } = useAuth();
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
       {/* Hero Section */}

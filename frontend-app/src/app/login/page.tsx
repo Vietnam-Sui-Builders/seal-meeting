@@ -6,38 +6,32 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon, GlobeIcon, CardStackIcon, UpdateIcon, LockClosedIcon, LightningBoltIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { ConnectButton, ConnectModal, useCurrentAccount, useWallets } from '@mysten/dapp-kit';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
-    const [isZkLoading, setIsZkLoading] = useState(false);
     const [error, setError] = useState('');
     const [openWallet, setOpenWallet] = useState(false);
     const router = useRouter();
 
     const currentAccount = useCurrentAccount();
     const wallets = useWallets();
+    const { loginWithZkLogin, isAuthenticated } = useAuth();
 
     // Check if wallets are available
     const hasWallets = wallets && wallets.length > 0;
 
     useEffect(() => {
-        if (currentAccount) {
+        if (isAuthenticated) {
             router.push('/');
         }
-    }, [currentAccount, router]);
+    }, [isAuthenticated, router]);
 
-    const handleZkLogin = async () => {
-        setIsZkLoading(true);
-        setError('');
+    const handleZkLogin = () => {
         try {
-            // TODO: Implement @mysten/zklogin integration
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            // Redirect to main app after successful login
-            router.push('/');
+            loginWithZkLogin();
         } catch (err) {
-            setError('Failed to authenticate with Google');
+            setError('Failed to initiate Google login');
             console.error(err);
-        } finally {
-            setIsZkLoading(false);
         }
     };
 
@@ -75,16 +69,11 @@ export default function LoginPage() {
                         {/* zkLogin Button */}
                         <button
                             onClick={handleZkLogin}
-                            disabled={isZkLoading}
-                            className="w-full group relative overflow-hidden bg-gray-700 border-2 border-gray-600 rounded-xl p-4 hover:bg-gray-600 hover:border-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full group relative overflow-hidden bg-gray-700 border-2 border-gray-600 rounded-xl p-4 hover:bg-gray-600 hover:border-gray-500 transition-all duration-200"
                         >
                             <div className="flex items-center justify-center gap-4">
                                 <div className="flex-shrink-0 w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center group-hover:bg-red-100 transition-colors">
-                                    {isZkLoading ? (
-                                        <UpdateIcon className="w-6 h-6 text-red-500 animate-spin" />
-                                    ) : (
-                                        <GlobeIcon className="w-6 h-6 text-red-500" />
-                                    )}
+                                    <GlobeIcon className="w-6 h-6 text-red-500" />
                                 </div>
                                 <div className="text-left">
                                     <h3 className="font-semibold text-white mb-1">

@@ -2,20 +2,20 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { ArrowLeftIcon, CopyIcon, ExitIcon, CheckIcon } from '@radix-ui/react-icons';
 import Link from 'next/link';
 
 export default function WalletPage() {
     const router = useRouter();
-    const { isConnected, address, balance, disconnect } = useWallet();
+    const { isAuthenticated, address, balance, disconnect, authMethod, user } = useAuth();
     const [copied, setCopied] = React.useState(false);
 
     React.useEffect(() => {
-        if (!isConnected) {
+        if (!isAuthenticated) {
             router.push('/login');
         }
-    }, [isConnected, router]);
+    }, [isAuthenticated, router]);
 
     const handleCopyAddress = () => {
         if (address) {
@@ -30,7 +30,7 @@ export default function WalletPage() {
         router.push('/');
     };
 
-    if (!isConnected) {
+    if (!isAuthenticated) {
         return null;
     }
 
@@ -62,6 +62,11 @@ export default function WalletPage() {
                         <p className="text-gray-500">
                             View your wallet details and manage your connection
                         </p>
+                        <div className="mt-2">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {authMethod === 'zklogin' ? '🔐 zkLogin (Google)' : '💼 Wallet Provider'}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Wallet Details */}

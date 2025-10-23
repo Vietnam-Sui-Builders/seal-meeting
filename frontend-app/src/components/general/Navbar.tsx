@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { HamburgerMenuIcon, Cross2Icon } from '@radix-ui/react-icons';
-import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const router = useRouter();
-    const { isConnected, address, disconnect } = useWallet();
+    const { isAuthenticated, address, disconnect } = useAuth();
 
     const handleConnect = () => {
         router.push('/login');
@@ -64,7 +64,7 @@ export default function Navbar() {
 
                         {/* Connect Wallet Button */}
                         <div className="hidden md:block">
-                            {isConnected && address ? (
+                            {isAuthenticated && address ? (
                                 <div className="flex items-center gap-3">
                                     <Link 
                                         href="/wallet"
@@ -126,7 +126,7 @@ export default function Navbar() {
                                 >
                                     Documentation
                                 </Link>
-                                {isConnected && address ? (
+                                {isAuthenticated && address ? (
                                     <>
                                         <Link 
                                             href="/wallet"
