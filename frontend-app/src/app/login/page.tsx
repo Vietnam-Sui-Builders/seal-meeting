@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftIcon, GlobeIcon, CardStackIcon, UpdateIcon, LockClosedIcon, LightningBoltIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { ArrowLeftIcon, GlobeIcon, CardStackIcon, UpdateIcon, LockClosedIcon, LightningBoltIcon, ExclamationTriangleIcon, FrameIcon } from '@radix-ui/react-icons';
 import { ConnectButton, ConnectModal, useCurrentAccount, useWallets } from '@mysten/dapp-kit';
 import { useAuth } from '@/context/AuthContext';
 
@@ -87,8 +87,11 @@ export default function LoginPage() {
                         <ConnectModal
                             trigger={
                                 <button className="w-full">
-                                    <div className="w-full border-2 border-gray-600 rounded-xl p-4 bg-gray-700 hover:bg-gray-600 transition-colors">
-                                        <div className="flex items-center gap-4 justify-center text-white">
+                                    <div className="w-full items-center flex justify-center border-2 border-gray-600 rounded-xl p-4 bg-gray-700 hover:bg-gray-600 transition-colors gap-4">
+                                        <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                                            <FrameIcon className="w-6 h-6 text-red-500" />
+                                        </div>
+                                        <div className="text-white">
                                             Connect Wallet
                                         </div>
                                     </div>
