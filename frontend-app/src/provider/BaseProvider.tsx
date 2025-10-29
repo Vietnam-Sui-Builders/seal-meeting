@@ -38,7 +38,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
                     <WalletProvider
                         theme={lightTheme}
-                        autoConnect={false}
+                        autoConnect={true}
                         enableUnsafeBurner={process.env.NODE_ENV === 'development'}
                         storageKey="sui-meet-wallet"
                     >

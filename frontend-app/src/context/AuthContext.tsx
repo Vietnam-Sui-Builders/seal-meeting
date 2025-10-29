@@ -9,6 +9,7 @@ export type AuthMethod = 'wallet' | 'zklogin' | null;
 interface AuthContextType {
     // Common properties
     isAuthenticated: boolean;
+    isConnecting: boolean;  // Loading state for auto-connect
     address: string | null;
     balance: string | null;
     authMethod: AuthMethod;
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { mutate: disconnectWallet } = useDisconnectWallet();
     const [zkUser, setZkUser] = useState<DecodedJwt | null>(null);
     const [zkAddress, setZkAddress] = useState<string | null>(null);
+    const [isConnecting, setIsConnecting] = useState(true);
 
     // Determine which auth method is active
     const authMethod: AuthMethod = walletAccount 
@@ -49,6 +51,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const balance = balanceData?.totalBalance 
         ? (Number(balanceData.totalBalance) / 1_000_000_000).toFixed(4)
         : null;
+
+    // Handle initial loading state for auto-connect
+    useEffect(() => {
+        // Check if there's a stored wallet connection
+        const storedWallet = localStorage.getItem('sui-meet-wallet');
+        
+        if (!storedWallet) {
+            // No stored wallet, stop loading immediately
+            setIsConnecting(false);
+            return;
+        }
+
+        // Give auto-connect a moment to complete
+        const timer = setTimeout(() => {
+            setIsConnecting(false);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Update loading state when wallet connects
+    useEffect(() => {
+        if (walletAccount) {
+            setIsConnecting(false);
+        }
+    }, [walletAccount]);
 
     // Load zkLogin user from localStorage on mount
     useEffect(() => {
@@ -91,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <AuthContext.Provider 
             value={{
                 isAuthenticated,
+                isConnecting,
                 address,
                 balance,
                 authMethod,

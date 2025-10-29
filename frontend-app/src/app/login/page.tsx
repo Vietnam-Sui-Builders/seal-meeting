@@ -20,9 +20,17 @@ export default function LoginPage() {
     // Check if wallets are available
     const hasWallets = wallets && wallets.length > 0;
 
+    // Redirect to room creation after wallet connection
+    useEffect(() => {
+        if (currentAccount) {
+            router.push('/room');
+        }
+    }, [currentAccount, router]);
+
+    // Also redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            router.push('/');
+            router.push('/room');
         }
     }, [isAuthenticated, router]);
 
