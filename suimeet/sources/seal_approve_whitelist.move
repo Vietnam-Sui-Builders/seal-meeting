@@ -53,6 +53,7 @@ public entry fun remove_from_whitelist(
 }
 
 /// Seal approve function for decryption checks
+/// chạy dry run ko cần lên chain
 public entry fun seal_approve(id: vector<u8>, policy: &SealApproveWhitelist, _clock: &Clock): bool {
     let mut bte = bcs::new(id);
     let guest_addr = bte.peel_address();
