@@ -88,6 +88,7 @@ public struct RoomEnded has copy, drop {
 public struct HostCapGranted has copy, drop {
     room_id: object::ID,
     new_host: address,
+    admin_cap_object_id: object::ID,
     granted_by: address,
 }
 
@@ -314,6 +315,7 @@ public fun add_new_host(
     event::emit(HostCapGranted {
         room_id,
         new_host,
+        admin_cap_object_id: object::id(&new_host_cap),
         granted_by: tx_context::sender(ctx),
     });
 
