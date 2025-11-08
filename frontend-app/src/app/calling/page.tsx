@@ -226,10 +226,18 @@ const CallingPage = () => {
         if (target === 'offer') {
           const off = await apiClient.getOffer(roomId).catch(() => null);
           if (off?.sdp) {
-            console.log('[Signaling] GUEST: Received offer from server');
-            const offerDesc = JSON.parse(off.sdp);
             const pc = pcRef.current;
             if (!pc) return;
+
+            // Check if we're in the right state to receive an offer
+            if (pc.signalingState !== 'stable' && pc.signalingState !== 'closed') {
+              console.log('[Signaling] GUEST: Ignoring offer, already processing (state:', pc.signalingState + ')');
+              return;
+            }
+
+            console.log('[Signaling] GUEST: Received offer from server');
+            const offerDesc = JSON.parse(off.sdp);
+
             await pc.setRemoteDescription(offerDesc);
             console.log('[Signaling] GUEST: Creating answer');
             const answer = await pc.createAnswer();
@@ -244,11 +252,20 @@ const CallingPage = () => {
         } else {
           const ans = await apiClient.getAnswer(roomId).catch(() => null);
           if (ans?.sdp) {
-            console.log('[Signaling] HOST: Received answer from server');
-            const answerDesc = JSON.parse(ans.sdp);
             const pc = pcRef.current;
             if (!pc) return;
+
+            // Check if we're in the right state to receive an answer
+            if (pc.signalingState !== 'have-local-offer') {
+              console.log('[Signaling] HOST: Ignoring answer, wrong state:', pc.signalingState);
+              return;
+            }
+
+            console.log('[Signaling] HOST: Received answer from server (state:', pc.signalingState + ')');
+            const answerDesc = JSON.parse(ans.sdp);
+
             await pc.setRemoteDescription(answerDesc);
+            console.log('[Signaling] HOST: Set remote description, new state:', pc.signalingState);
             // start polling for remote candidates
             console.log('[Signaling] HOST: Starting candidate polling');
             startCandidatePolling();
