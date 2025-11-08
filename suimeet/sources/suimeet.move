@@ -11,8 +11,7 @@ use suimeet::seal_approve_whitelist::{Self, SealApproveWhitelist};
 public struct MeetingRoom has key, store {
     id: object::UID,
     title: vector<u8>,
-    host: address,                    // Primary host
-    co_hosts: vector<address>,        // Additional hosts
+    hosts: vector<address>,            // All hosts (creator + added hosts)
     participants: vector<address>,     // Active participants
     max_participants: u64,
     require_approval: bool,
@@ -74,12 +73,20 @@ public struct GuestRevoked has copy, drop {
     revoked_at: u64,
 }
 
+public struct HostAdded has copy, drop {
+    room_id: object::ID,
+    new_host: address,
+    added_by: address,
+    added_at: u64,
+}
+
 // ========== Error Codes ==========
 
 const ERROR_NOT_HOST: u64 = 1;
 const ERROR_ROOM_FULL: u64 = 2;
 const ERROR_ROOM_ENDED: u64 = 3;
 const ERROR_APPROVAL_REQUIRED: u64 = 4;
+const ERROR_ALREADY_HOST: u64 = 5;
 
 // Status constants
 const STATUS_SCHEDULED: u8 = 1;
@@ -124,11 +131,13 @@ public fun create_room(
     let room_id = object::uid_to_inner(&room_uid);
     let created_at = clock::timestamp_ms(clock);
 
+    let mut hosts = vector::empty<address>();
+    vector::push_back(&mut hosts, sender);
+
     let room = MeetingRoom {
         id: room_uid,
         title,
-        host: sender,
-        co_hosts: vector::empty<address>(),
+        hosts,
         participants: initial_participants,
         max_participants,
         require_approval,
@@ -174,7 +183,8 @@ public fun start_room(
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ) {
-    assert!(tx_context::sender(ctx) == room.host, ERROR_NOT_HOST);
+    let sender = tx_context::sender(ctx);
+    assert!(vector::contains(&room.hosts, &sender), ERROR_NOT_HOST);
     assert!(room.status == STATUS_SCHEDULED, ERROR_ROOM_ENDED);
 
     let room_id = object::uid_to_inner(&room.id);
@@ -201,7 +211,8 @@ public fun end_room(
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ) {
-    assert!(tx_context::sender(ctx) == room.host, ERROR_NOT_HOST);
+    let sender = tx_context::sender(ctx);
+    assert!(vector::contains(&room.hosts, &sender), ERROR_NOT_HOST);
     assert!(room.status != STATUS_ENDED, ERROR_ROOM_ENDED);
 
     let room_id = object::uid_to_inner(&room.id);
@@ -230,7 +241,7 @@ public fun approve_guest(
 ) {
     let sender = tx_context::sender(ctx);
     assert!(room.require_approval, ERROR_APPROVAL_REQUIRED);
-    assert!(sender == room.host || vector::contains(&room.co_hosts, &sender), ERROR_NOT_HOST);
+    assert!(vector::contains(&room.hosts, &sender), ERROR_NOT_HOST);
     assert!(vector::length(&room.participants) <= room.max_participants, ERROR_ROOM_FULL);
 
     seal_approve_whitelist::add_to_whitelist(&mut room.seal_policy, guest, clock);
@@ -244,14 +255,14 @@ public fun approve_guest(
     });
 }
 
-public entry fun revoke_guest(
+public fun revoke_guest(
     room: &mut MeetingRoom,
     guest: address,
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ) {
     let sender = tx_context::sender(ctx);
-    assert!(sender == room.host || vector::contains(&room.co_hosts, &sender), ERROR_NOT_HOST);
+    assert!(vector::contains(&room.hosts, &sender), ERROR_NOT_HOST);
 
     seal_approve_whitelist::remove_from_whitelist(&mut room.seal_policy, guest, clock);
 
@@ -269,23 +280,33 @@ public entry fun revoke_guest(
     });
 }
 
-public fun add_co_host(
+public fun add_host(
     room: &mut MeetingRoom,
-    co_host: address,
+    new_host: address,
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ) {
-    assert!(tx_context::sender(ctx) == room.host, ERROR_NOT_HOST);
-    vector::push_back(&mut room.co_hosts, co_host);
-    seal_approve_whitelist::add_to_whitelist(&mut room.seal_policy, co_host, clock);
-    vector::push_back(&mut room.participants, co_host);
+    let sender = tx_context::sender(ctx);
+    // Only the first host (creator) can add new hosts
+    assert!(vector::borrow(&room.hosts, 0) == &sender, ERROR_NOT_HOST);
+    assert!(!vector::contains(&room.hosts, &new_host), ERROR_ALREADY_HOST); // Already a host
+
+    vector::push_back(&mut room.hosts, new_host);
+    seal_approve_whitelist::add_to_whitelist(&mut room.seal_policy, new_host, clock);
+    vector::push_back(&mut room.participants, new_host);
+    event::emit(HostAdded {
+        room_id: object::uid_to_inner(&room.id),
+        added_by: sender,
+        new_host,
+        added_at: clock::timestamp_ms(clock),
+    });
 }
 
 // ========== View Functions (for frontend/indexer) ==========
 
 // Room view functions
-public fun get_room_info(room: &MeetingRoom): (vector<u8>, address, u8, u64, u64, u64) {
-    (room.title, room.host, room.status, room.created_at, room.started_at, room.ended_at)
+public fun get_room_info(room: &MeetingRoom): (vector<u8>, vector<address>, u8, u64, u64, u64) {
+    (room.title, room.hosts, room.status, room.created_at, room.started_at, room.ended_at)
 }
 
 public fun get_participants(room: &MeetingRoom): vector<address> {
@@ -297,7 +318,11 @@ public fun get_participant_count(room: &MeetingRoom): u64 {
 }
 
 public fun is_host(room: &MeetingRoom, addr: address): bool {
-    room.host == addr || vector::contains(&room.co_hosts, &addr)
+    vector::contains(&room.hosts, &addr)
+}
+
+public fun get_hosts(room: &MeetingRoom): vector<address> {
+    room.hosts
 }
 
 public fun get_status(room: &MeetingRoom): u8 {
