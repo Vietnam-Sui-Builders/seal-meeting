@@ -23,6 +23,7 @@ interface Props {
   pinned?: boolean;
   reaction?: string | null;
   heightClass?: string;
+  isLocal?: boolean; // Whether this is the local user's video (mute audio to prevent feedback)
 }
 
 const VideoFeed: React.FC<Props> = ({
@@ -34,6 +35,7 @@ const VideoFeed: React.FC<Props> = ({
   pinned = false,
   reaction = null,
   heightClass = 'h-64',
+  isLocal = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -60,7 +62,7 @@ const VideoFeed: React.FC<Props> = ({
         className="w-full h-full object-cover"
         autoPlay
         playsInline
-        muted={audioMuted}
+        muted={isLocal}
       />
       {label && (
         <div className="absolute bottom-2 left-2 bg-black/60 text-white px-2 py-1 rounded text-sm">

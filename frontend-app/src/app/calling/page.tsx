@@ -230,8 +230,9 @@ const CallingPage = () => {
             if (!pc) return;
 
             // Check if we're in the right state to receive an offer
-            if (pc.signalingState !== 'stable' && pc.signalingState !== 'closed') {
-              console.log('[Signaling] GUEST: Ignoring offer, already processing (state:', pc.signalingState + ')');
+            // Guest should only process offer when in 'stable' state (initial state)
+            if (pc.signalingState !== 'stable') {
+              console.log('[Signaling] GUEST: Ignoring offer, wrong state:', pc.signalingState);
               return;
             }
 
@@ -612,7 +613,7 @@ const CallingPage = () => {
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-9">
                 <div className="border border-gray-800 rounded-lg p-1 bg-black">
-                  <VideoFeed stream={shareStream} label="Your Screen" heightClass="h-[460px]" />
+                  <VideoFeed stream={shareStream} label="Your Screen" heightClass="h-[460px]" isLocal={true} />
                 </div>
               </div>
               <div className="col-span-3 flex flex-col gap-3">
@@ -625,6 +626,7 @@ const CallingPage = () => {
                       videoMuted={!videoEnabled}
                       pinned={pinnedId === 'you'}
                       heightClass="h-40"
+                      isLocal={true}
                     />
                   </div>
                 </div>
@@ -637,6 +639,7 @@ const CallingPage = () => {
                       videoMuted={false}
                       pinned={pinnedId === 'peer'}
                       heightClass="h-40"
+                      isLocal={false}
                     />
                   </div>
                 </div>
@@ -653,6 +656,7 @@ const CallingPage = () => {
                     videoMuted={!videoEnabled}
                     pinned={pinnedId === 'you'}
                     heightClass="h-64"
+                    isLocal={true}
                   />
                 </div>
               </div>
@@ -665,6 +669,7 @@ const CallingPage = () => {
                     videoMuted={false}
                     pinned={pinnedId === 'peer'}
                     heightClass="h-64"
+                    isLocal={false}
                   />
                 </div>
               </div>
