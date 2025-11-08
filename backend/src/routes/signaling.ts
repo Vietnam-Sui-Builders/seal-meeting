@@ -80,4 +80,27 @@ router.get('/:roomId/candidates', (req: Request, res: Response) => {
   res.json({ candidates: out });
 });
 
+// End call / cleanup room signaling data
+router.post('/:roomId/end', (req: Request, res: Response) => {
+  const { roomId } = req.params;
+  const { role } = req.body as { role?: 'host' | 'guest' };
+  
+  if (!rooms[roomId]) {
+    // Room doesn't exist, but that's okay - already cleaned up
+    return res.json({ ok: true, message: 'Room already cleaned up' });
+  }
+
+  // If host ends the call, clean up the entire room
+  // If guest leaves, just acknowledge (room data remains for other participants)
+  if (role === 'host') {
+    delete rooms[roomId];
+    console.log(`[Signaling] Room ${roomId} cleaned up by host`);
+    res.json({ ok: true, message: 'Room cleaned up' });
+  } else {
+    // Guest leaving - just acknowledge (host might still be there)
+    console.log(`[Signaling] Guest left room ${roomId}`);
+    res.json({ ok: true, message: 'Guest left' });
+  }
+});
+
 export default router;

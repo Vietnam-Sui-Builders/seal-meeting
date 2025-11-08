@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import CallControls from '@/components/calling/CallControls';
 import VideoFeed from '@/components/calling/VideoFeed';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import ConferenceHeader from '@/components/calling/ConferenceHeader';
 import ParticipantsPanel, { Participant } from '@/components/calling/ParticipantsPanel';
@@ -19,6 +19,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 
 const CallingPage = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const roomId = searchParams.get('roomId') || '';
   const role = (searchParams.get('role') as 'host' | 'guest') || 'guest';
   const client = useSuiClient();
@@ -78,11 +79,29 @@ const CallingPage = () => {
 
     // Log connection state changes
     pc.onconnectionstatechange = () => {
-      console.log('[WebRTC] Connection state:', pc.connectionState);
+      const state = pc.connectionState;
+      console.log('[WebRTC] Connection state:', state);
+      setConnectionState(state);
+      if (state === 'connected') {
+        console.log('[WebRTC] ✅ Connection established!');
+      } else if (state === 'failed' || state === 'disconnected') {
+        console.log('[WebRTC] ❌ Connection failed or disconnected');
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log('[WebRTC] ICE connection state:', pc.iceConnectionState);
+      const state = pc.iceConnectionState;
+      console.log('[WebRTC] ICE connection state:', state);
+      setIceConnectionState(state);
+      if (state === 'connected' || state === 'completed') {
+        console.log('[WebRTC] ✅ ICE connection established!');
+      } else if (state === 'failed') {
+        console.log('[WebRTC] ❌ ICE connection failed');
+      }
+    };
+
+    pc.onsignalingstatechange = () => {
+      console.log('[WebRTC] Signaling state:', pc.signalingState);
     };
 
     pc.ontrack = (event) => {
@@ -119,6 +138,7 @@ const CallingPage = () => {
       pc.onicecandidate = null;
       pc.onconnectionstatechange = null;
       pc.oniceconnectionstatechange = null;
+      pc.onsignalingstatechange = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pcReady, roomId, role, audioEnabled, videoEnabled]);
@@ -332,19 +352,68 @@ const CallingPage = () => {
     }
   };
 
-  const endCall = () => {
+  const endCall = async () => {
     try {
-      localStream?.getTracks().forEach((t) => t.stop());
-      shareStream?.getTracks().forEach((t) => t.stop());
-      pcRef.current?.close();
-      setLocalStream(null);
-      setRemoteStream(null);
-      setShareStream(null);
+      console.log('[EndCall] Ending call as', role, 'for room', roomId);
+      
+      // Stop all polling first
+      stopPolling();
+      
+      // Stop recording if active
       if (isRecording) {
         stopRecording();
       }
+      
+      // Stop all media streams
+      localStream?.getTracks().forEach((t) => {
+        t.stop();
+        console.log('[EndCall] Stopped local track:', t.kind);
+      });
+      shareStream?.getTracks().forEach((t) => {
+        t.stop();
+        console.log('[EndCall] Stopped share track:', t.kind);
+      });
+      remoteStream?.getTracks().forEach((t) => {
+        t.stop();
+        console.log('[EndCall] Stopped remote track:', t.kind);
+      });
+      
+      // Close peer connection
+      if (pcRef.current) {
+        pcRef.current.close();
+        console.log('[EndCall] Peer connection closed');
+      }
+      
+      // Notify backend that call is ending
+      try {
+        await apiClient.endCall(roomId, role);
+        console.log('[EndCall] Notified backend of call end');
+      } catch (err) {
+        console.warn('[EndCall] Failed to notify backend (non-critical):', err);
+      }
+      
+      // Clear all state
+      setLocalStream(null);
+      setRemoteStream(null);
+      setShareStream(null);
+      setParticipants([]);
+      setMessages([]);
+      
+      // Navigate away from calling page
+      // Host goes to room detail page, guest goes to home
+      if (role === 'host' && roomId) {
+        router.push(`/room/${roomId}`);
+      } else {
+        router.push('/my-rooms');
+      }
     } catch (e) {
-      console.error('End call error', e);
+      console.error('[EndCall] Error ending call:', e);
+      // Still try to navigate away even if cleanup failed
+      if (role === 'host' && roomId) {
+        router.push(`/room/${roomId}`);
+      } else {
+        router.push('/my-rooms');
+      }
     }
   };
 
