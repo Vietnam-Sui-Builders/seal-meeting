@@ -231,6 +231,10 @@ class ApiClient {
     if (!res.ok) throw new Error(`API ${res.status}`);
     return res.json();
   }
+
+  async endCall(roomId: string, role: 'host' | 'guest') {
+    return this.request(`/signaling/${roomId}/end`, 'POST', { role });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
