@@ -1,4 +1,4 @@
-module suimeet::seal_approve_whitelist;
+module sealmeet::seal_approve_whitelist;
 
 use sui::clock::{Self, Clock};
 use sui::bcs::Self;
