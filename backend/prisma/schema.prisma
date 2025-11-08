@@ -50,6 +50,12 @@ enum P2PEventType {
   share
 }
 
+enum RoomStatus {
+  scheduled
+  active
+  ended
+}
+
 model User {
   id                   String   @id @default(cuid())
   primaryWalletAddress String?  @db.VarChar(100)
@@ -165,14 +171,18 @@ model DelegatedSignature {
 }
 
 model Room {
-  id              String   @id @default(cuid())
-  onchainObjectId String   @unique @db.VarChar(128)
+  id              String     @id @default(cuid())
+  onchainObjectId String     @unique @db.VarChar(128)
   ownerUserId     String
   ownerWalletId   String
-  title           String   @db.VarChar(256)
-  requireApproval Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  title           String     @db.VarChar(256)
+  description     String?    @db.Text // Optional room description
+  maxParticipants Int        @default(20) // Maximum participants allowed (1-20)
+  requireApproval Boolean    @default(true)
+  hostCapId       String?    @db.VarChar(128) // HostCap object ID for managing the room
+  status          RoomStatus @default(scheduled) // Room status: scheduled, active, ended
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   // Seal & Invite enhancements
   sealPolicyId    String? @db.VarChar(128) // Links to on-chain SealApproveWhitelist UID
@@ -196,6 +206,8 @@ model Room {
   @@index([ownerUserId])
   @@index([ownerWalletId])
   @@index([sealPolicyId])
+  @@index([hostCapId])
+  @@index([status])
   @@index([startTime])
   @@index([endTime])
 }

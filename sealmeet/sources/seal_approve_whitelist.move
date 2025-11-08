@@ -1,10 +1,7 @@
-module suimeet::seal_approve_whitelist;
+module sealmeet::seal_approve_whitelist;
 
-use std::vector;
 use sui::clock::{Self, Clock};
-use sui::object::{Self, UID};
-use sui::tx_context::{Self, TxContext};
-use sui::bcs::{Self, BCS};
+use sui::bcs::Self;
 
 
 /// Struct for whitelist policy
@@ -59,4 +56,8 @@ public entry fun seal_approve(id: vector<u8>, policy: &SealApproveWhitelist, _cl
     let guest_addr = bte.peel_address();
 
     vector::contains(&policy.whitelist, &guest_addr)
+}
+
+public fun policy_id(self: &SealApproveWhitelist): object::ID {
+    object::id(self)
 }

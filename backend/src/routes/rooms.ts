@@ -46,7 +46,11 @@ router.get('/', async (req: Request, res: Response) => {
         id: room.id,
         onchainObjectId: room.onchainObjectId,
         title: room.title,
+        description: room.description,
+        maxParticipants: room.maxParticipants,
         requireApproval: room.requireApproval,
+        status: room.status,
+        hostCapId: room.hostCapId,
         attendanceCount: room.attendanceCount,
         memberCount: room.memberships.length,
         pendingApprovals: room.approvals.length,
@@ -65,7 +69,16 @@ router.get('/', async (req: Request, res: Response) => {
 // Other routes still require authentication
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { title, initialParticipants, requireApproval = true, walletAddress, onchainObjectId } = req.body;
+    const { 
+      title, 
+      description, 
+      maxParticipants, 
+      initialParticipants, 
+      requireApproval = true, 
+      walletAddress, 
+      onchainObjectId,
+      hostCapId 
+    } = req.body;
     
     if (!walletAddress) {
       return res.status(400).json({ error: 'Wallet address is required' });
@@ -77,6 +90,12 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!title || !Array.isArray(initialParticipants)) {
       return res.status(400).json({ error: 'Title and initial participants are required' });
+    }
+
+    // Validate maxParticipants
+    const maxParticipantsNum = maxParticipants ? parseInt(maxParticipants) : 20;
+    if (isNaN(maxParticipantsNum) || maxParticipantsNum < 1 || maxParticipantsNum > 20) {
+      return res.status(400).json({ error: 'Max participants must be between 1 and 20' });
     }
 
     // Find or create user and wallet (no JWT required - wallet address is proof)
@@ -112,7 +131,11 @@ router.post('/', async (req: Request, res: Response) => {
         ownerUserId: user.id,
         ownerWalletId: wallet.id,
         title,
+        description: description || null,
+        maxParticipants: maxParticipantsNum,
         requireApproval,
+        hostCapId: hostCapId || null, // HostCap object ID for managing the room
+        status: 'scheduled', // New rooms start as scheduled
         sealPolicyId: null, // Can be extracted from on-chain object if needed
         attendanceCount: initialParticipants.length,
       },
@@ -137,7 +160,11 @@ router.post('/', async (req: Request, res: Response) => {
         id: room.id,
         onchainObjectId: room.onchainObjectId,
         title: room.title,
+        description: room.description,
+        maxParticipants: room.maxParticipants,
         requireApproval: room.requireApproval,
+        status: room.status,
+        hostCapId: room.hostCapId,
         createdAt: room.createdAt,
       },
       memberships: memberships.length,
@@ -180,7 +207,11 @@ router.get('/:roomId', async (req: Request, res: Response) => {
         id: room.id,
         onchainObjectId: room.onchainObjectId,
         title: room.title,
+        description: room.description,
+        maxParticipants: room.maxParticipants,
         requireApproval: room.requireApproval,
+        status: room.status,
+        hostCapId: room.hostCapId,
         sealPolicyId: room.sealPolicyId,
         startTime: room.startTime,
         endTime: room.endTime,

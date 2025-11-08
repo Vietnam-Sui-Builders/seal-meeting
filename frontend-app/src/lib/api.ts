@@ -6,10 +6,13 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/a
 
 interface CreateRoomRequest {
   title: string;
+  description?: string;
+  maxParticipants?: number;
   initialParticipants: string[];
   requireApproval: boolean;
   walletAddress: string;
   onchainObjectId: string;
+  hostCapId?: string;
 }
 
 interface CreateRoomResponse {

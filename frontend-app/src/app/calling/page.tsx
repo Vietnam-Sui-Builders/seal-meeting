@@ -9,6 +9,7 @@ import ParticipantsPanel, { Participant } from '@/components/calling/Participant
 import ChatPanel, { ChatMessage } from '@/components/calling/ChatPanel';
 import ReactionsBar from '@/components/calling/ReactionsBar';
 import ScreenShareModal from '@/components/calling/ScreenShareModal';
+import { uploadToWalrus } from '@/lib/walrus';
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -28,6 +29,8 @@ const CallingPage = () => {
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -178,6 +181,9 @@ const CallingPage = () => {
       setLocalStream(null);
       setRemoteStream(null);
       setShareStream(null);
+      if (isRecording) {
+        stopRecording();
+      }
     } catch (e) {
       console.error('End call error', e);
     }
@@ -232,6 +238,62 @@ const CallingPage = () => {
 
   const togglePin = (id: string) => setPinnedId((p) => (p === id ? null : id));
 
+  const getRecordingTargetStream = (): MediaStream | null => {
+    // Prefer share stream, then remote peer, then self.
+    return shareStream || remoteStream || localStream;
+  };
+
+  const startRecording = () => {
+    if (isRecording) return;
+    const target = getRecordingTargetStream();
+    if (!target) {
+      alert('No stream available to record yet.');
+      return;
+    }
+    try {
+      recordedChunksRef.current = [];
+      const mimeCandidates = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+      ];
+      const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+      const rec = new MediaRecorder(target, mimeType ? { mimeType } : undefined);
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        try {
+          const blob = new Blob(recordedChunksRef.current, { type: mimeType || 'video/webm' });
+          const filename = `meeting-${roomId}-${Date.now()}.webm`;
+          const result = await uploadToWalrus(blob, filename);
+          console.log('Walrus upload result:', result);
+          alert('Recording uploaded to Walrus.' + (result?.id ? ` Blob ID: ${result.id}` : ''));
+        } catch (err) {
+          console.error('Upload failed', err);
+          alert('Upload to Walrus failed. Check console for details.');
+        }
+      };
+      recorderRef.current = rec;
+      rec.start(1000);
+      setIsRecording(true);
+    } catch (e) {
+      console.error('Recording start failed', e);
+      alert('Unable to start recording.');
+    }
+  };
+
+  const stopRecording = () => {
+    try {
+      const rec = recorderRef.current;
+      if (rec && rec.state !== 'inactive') {
+        rec.stop();
+      }
+    } finally {
+      setIsRecording(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-950">
       <ConferenceHeader
@@ -239,7 +301,14 @@ const CallingPage = () => {
         elapsedSeconds={elapsedSeconds}
         isSecure
         isRecording={isRecording}
-        onToggleRecording={() => setIsRecording((v) => !v)}
+        onToggleRecording={() => {
+          if (!isRecording) {
+            const ok = window.confirm('Allow recording this meeting?');
+            if (ok) startRecording();
+          } else {
+            stopRecording();
+          }
+        }}
         captionsEnabled={captionsEnabled}
         onToggleCaptions={() => setCaptionsEnabled((v) => !v)}
       />

@@ -90,8 +90,8 @@ function JoinRoomPageContent() {
     };
 
     const handleJoinMeeting = () => {
-        // TODO: Navigate to actual meeting room with video/audio
-        router.push(`/meeting?roomId=${roomId}`);
+        // Navigate to calling page for video/audio meeting
+        router.push(`/calling?roomId=${roomId}&role=guest`);
     };
 
     if (loading) {
@@ -183,15 +183,6 @@ function JoinRoomPageContent() {
                             Join Meeting Now
                             <ChevronRightIcon className="w-5 h-5" />
                         </button>
-                        <div className="mt-3">
-                          <button
-                              onClick={() => router.push(`/calling?roomId=${roomId}&role=guest`)}
-                              className="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-                          >
-                              Enter Call
-                              <ChevronRightIcon className="w-4 h-4" />
-                          </button>
-                        </div>
                     </div>
                 )}
 

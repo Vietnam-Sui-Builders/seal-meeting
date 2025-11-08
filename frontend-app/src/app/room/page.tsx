@@ -22,6 +22,7 @@ import { useAuth as useAuthContext } from '@/context/AuthContext';
 // Package ID from environment variable
 const PACKAGE_ID = process.env.NEXT_PUBLIC_PACKAGE_ID || '';
 const CLOCK_OBJECT_ID = '0x6'; // Sui Clock object (shared)
+const REGISTRY_OBJECT_ID = process.env.NEXT_PUBLIC_REGISTRY_ID || ''; // RoomRegistry shared object ID
 
 if (!PACKAGE_ID || PACKAGE_ID === 'YOUR_PACKAGE_ID') {
     console.error('NEXT_PUBLIC_PACKAGE_ID is not set. Please set it in .env.local');
@@ -56,11 +57,16 @@ function RoomPageContent() {
     // Form state for creating meeting
     const [formData, setFormData] = useState({
         title: '',
+        description: '',
         date: '',
         time: '',
         duration: '60',
+        maxParticipants: '10',
         requireApproval: true,
     });
+
+    // HostCap state - stores the HostCap object ID for managing the room
+    const [hostCapId, setHostCapId] = useState<string>('');
 
     // Whitelist management
     const [whitelist, setWhitelist] = useState<WhitelistAddress[]>([]);
@@ -168,6 +174,21 @@ function RoomPageContent() {
             return;
         }
 
+        // Validate registry ID
+        if (!REGISTRY_OBJECT_ID) {
+            setError('Registry object ID is not configured. Please set NEXT_PUBLIC_REGISTRY_ID in .env.local');
+            setLoading(false);
+            return;
+        }
+
+        // Validate max participants
+        const maxParticipants = parseInt(formData.maxParticipants);
+        if (isNaN(maxParticipants) || maxParticipants < 1 || maxParticipants > 20) {
+            setError('Max participants must be between 1 and 20');
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError('');
 
@@ -209,17 +230,31 @@ function RoomPageContent() {
             // Step 1: Create room on-chain via Sui transaction
             const txb = new Transaction();
             const titleBytes = new TextEncoder().encode(formData.title);
+            const descriptionBytes = formData.description 
+                ? new TextEncoder().encode(formData.description)
+                : null;
             const participants = whitelist.map(item => item.address);
+            const maxParticipants = parseInt(formData.maxParticipants);
             
             // Set gas budget (100M MIST = 0.1 SUI) - wallet will auto-select gas coins
             txb.setGasBudget(100_000_000);
             
+            // New contract signature: create_room(registry, title, description, max_participants, require_approval, initial_participants, clock)
+            // For Option<vector<u8>>, pass empty vector for None, or the actual vector for Some
+            const descriptionArg = descriptionBytes 
+                ? Array.from(descriptionBytes)
+                : []; // Empty array for None option
+            
             txb.moveCall({
-                target: `${PACKAGE_ID}::meeting_room::create_room`,
+                target: `${PACKAGE_ID}::sealmeet::create_room`,
                 arguments: [
-                    txb.pure.vector('u8', Array.from(titleBytes)),
-                    txb.pure.vector('address', participants),
-                    txb.pure.bool(formData.requireApproval),
+                    txb.object(REGISTRY_OBJECT_ID), // Registry shared object
+                    txb.pure.vector('u8', Array.from(titleBytes)), // title
+                    txb.pure.option('vector<u8>', descriptionArg), // description (empty vector = None, non-empty = Some)
+                    txb.pure.u64(maxParticipants), // max_participants
+                    txb.pure.bool(formData.requireApproval), // require_approval
+                    txb.pure.vector('address', participants), // initial_participants
+                    txb.object(CLOCK_OBJECT_ID), // Clock object
                 ],
             });
 
@@ -276,22 +311,42 @@ function RoomPageContent() {
 
                             console.log('Transaction confirmed, extracting object ID...');
 
-                            // Extract the created room object ID from object changes
+                            // Extract the created room object ID and HostCap from object changes
                             let roomObjectId: string | null = null;
+                            let hostCapObjectId: string | null = null;
                             
                             // Try objectChanges first (most reliable)
                             const objectChanges = txDetails.objectChanges || [];
+                            
+                            // Find MeetingRoom object (shared object)
                             const createdRoom = objectChanges.find(
                                 (change: any) => 
                                     change.type === 'created' && 
                                     (change.objectType?.includes('MeetingRoom') || 
-                                     change.objectType?.includes('meeting_room::MeetingRoom') ||
-                                     change.objectType?.includes('MeetingRoom'))
+                                     change.objectType?.includes('sealmeet::MeetingRoom') ||
+                                     change.objectType?.includes('sealmeet::sealmeet::MeetingRoom'))
+                            );
+
+                            // Find HostCap object (owned by sender)
+                            const createdHostCap = objectChanges.find(
+                                (change: any) => 
+                                    change.type === 'created' && 
+                                    (change.objectType?.includes('HostCap') || 
+                                     change.objectType?.includes('sealmeet::HostCap') ||
+                                     change.objectType?.includes('sealmeet::sealmeet::HostCap'))
                             );
 
                             if (createdRoom && createdRoom.type === 'created' && createdRoom.objectId) {
                                 roomObjectId = createdRoom.objectId;
                                 console.log('Found room object ID from objectChanges:', roomObjectId);
+                            }
+
+                            if (createdHostCap && createdHostCap.type === 'created' && createdHostCap.objectId) {
+                                hostCapObjectId = createdHostCap.objectId;
+                                if (hostCapObjectId) {
+                                    setHostCapId(hostCapObjectId);
+                                    console.log('Found HostCap object ID:', hostCapObjectId);
+                                }
                             }
 
                             // If not found, try effects
@@ -323,14 +378,17 @@ function RoomPageContent() {
 
                             console.log('Room object ID extracted:', roomObjectId);
 
-                            // Step 2: Create room record in backend with on-chain object ID
+                            // Step 2: Create room record in backend with on-chain object ID and HostCap
                             const response = await apiClient.createRoom(
                                 {
                                     title: formData.title,
+                                    description: formData.description || undefined,
+                                    maxParticipants: parseInt(formData.maxParticipants),
                                     initialParticipants: whitelist.map(item => item.address),
                                     requireApproval: formData.requireApproval,
                                     walletAddress: currentAccount.address,
                                     onchainObjectId: roomObjectId,
+                                    hostCapId: hostCapObjectId || undefined,
                                 }
                             );
 
@@ -375,18 +433,23 @@ function RoomPageContent() {
     };
 
     const handleApproveGuest = async (guestAddress: string) => {
-        if (!currentAccount || !roomId) return;
+        if (!currentAccount || !roomId || !hostCapId) {
+            setError('HostCap not found. Please reload the page or create a new room.');
+            return;
+        }
 
         setLoading(true);
         try {
             const txb = new Transaction();
             txb.setGasBudget(100_000_000); // Set gas budget
+            // New signature: approve_guest(host_cap, room, guest, clock)
             txb.moveCall({
-                target: `${PACKAGE_ID}::meeting_room::approve_guest`,
+                target: `${PACKAGE_ID}::sealmeet::approve_guest`,
                 arguments: [
-                    txb.object(roomId),
-                    txb.pure.address(guestAddress),
-                    txb.object(CLOCK_OBJECT_ID),
+                    txb.object(hostCapId), // HostCap (owned object)
+                    txb.object(roomId), // MeetingRoom (shared object)
+                    txb.pure.address(guestAddress), // guest address
+                    txb.object(CLOCK_OBJECT_ID), // Clock object
                 ],
             });
 
@@ -412,18 +475,23 @@ function RoomPageContent() {
     };
 
     const handleRevokeGuest = async (guestAddress: string) => {
-        if (!currentAccount || !roomId) return;
+        if (!currentAccount || !roomId || !hostCapId) {
+            setError('HostCap not found. Please reload the page or create a new room.');
+            return;
+        }
 
         setLoading(true);
         try {
             const txb = new Transaction();
             txb.setGasBudget(100_000_000); // Set gas budget
+            // New signature: revoke_guest(host_cap, room, guest, clock)
             txb.moveCall({
-                target: `${PACKAGE_ID}::meeting_room::revoke_guest`,
+                target: `${PACKAGE_ID}::sealmeet::revoke_guest`,
                 arguments: [
-                    txb.object(roomId),
-                    txb.pure.address(guestAddress),
-                    txb.object(CLOCK_OBJECT_ID),
+                    txb.object(hostCapId), // HostCap (owned object)
+                    txb.object(roomId), // MeetingRoom (shared object)
+                    txb.pure.address(guestAddress), // guest address
+                    txb.object(CLOCK_OBJECT_ID), // Clock object
                 ],
             });
 
@@ -517,6 +585,36 @@ function RoomPageContent() {
                                         placeholder="Team Sync - Q1 Planning"
                                         required
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Description (Optional)
+                                    </label>
+                                    <textarea
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                                        placeholder="Brief description of the meeting..."
+                                        rows={3}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Max Participants *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={formData.maxParticipants}
+                                        onChange={(e) => setFormData({ ...formData, maxParticipants: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                                        placeholder="10"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Maximum number of participants (1-20)</p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -764,21 +862,16 @@ function RoomPageContent() {
                                     <p className="text-xs text-gray-500 mb-3">
                                         Only whitelisted addresses can access this meeting
                                     </p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <button
-                                        onClick={() => router.push(`/room/join?roomId=${roomId}`)}
-                                        className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-                                      >
-                                        Join Meeting
-                                        <ChevronRightIcon className="w-4 h-4" />
-                                      </button>
-                                      <button
+                                    <button
                                         onClick={() => router.push(`/calling?roomId=${roomId}&role=host`)}
-                                        className="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-                                      >
-                                        Start Call
-                                      </button>
-                                    </div>
+                                        className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        Start Meeting
+                                        <ChevronRightIcon className="w-4 h-4" />
+                                    </button>
+                                    <p className="text-xs text-gray-500 mt-2 text-center">
+                                        Share the invite link above for guests to join
+                                    </p>
                                 </div>
                             </div>
                         </div>
