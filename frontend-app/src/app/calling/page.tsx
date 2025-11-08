@@ -310,15 +310,15 @@ const CallingPage = () => {
       clearInterval(candidatePollingRef.current);
     }
 
-    // Poll for remote ICE candidates (role receives the other side's)
-    // If you're a host, get guest candidates. If you're guest, get host candidates.
-    const roleToGet = role === 'host' ? 'guest' : 'host';
-    console.log('[ICE] Starting to poll for', roleToGet, 'candidates (I am', role + ')');
+    // Poll for remote ICE candidates
+    // Backend logic: when you request with role X, it returns the OTHER peer's candidates
+    // So we request with our OWN role, and backend gives us the remote peer's candidates
+    console.log('[ICE] I am', role, '- requesting remote candidates');
     const intv = setInterval(async () => {
       try {
-        const { candidates } = await apiClient.getCandidates(roomId, roleToGet);
+        const { candidates } = await apiClient.getCandidates(roomId, role);
         if (candidates && candidates.length > 0) {
-          console.log('[ICE] Received', candidates.length, 'candidates from', roleToGet);
+          console.log('[ICE] Received', candidates.length, 'remote candidates');
         }
         const pc = pcRef.current;
         if (!pc) return;
@@ -327,7 +327,7 @@ const CallingPage = () => {
           try {
             if (pc) {
               await pc.addIceCandidate(c);
-              console.log('[ICE] Added candidate from', roleToGet);
+              console.log('[ICE] Added remote candidate');
             }
           } catch (err) {
             console.warn('[ICE] Failed to add ICE candidate', err);

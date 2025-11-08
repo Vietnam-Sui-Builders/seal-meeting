@@ -70,14 +70,34 @@ router.get('/:roomId/candidates', (req: Request, res: Response) => {
   const { role } = req.query as { role?: 'host' | 'guest' };
   const r = rooms[roomId];
   if (!r || !role) return res.status(404).json({ error: 'No candidates or role not provided' });
-  // role param indicates which role's candidates to fetch
-  // if role=host, fetch host's candidates; if role=guest, fetch guest's candidates
-  const list = role === 'host' ? r.hostCandidates : r.guestCandidates;
+  // role param indicates which role's candidates to FETCH (the remote peer)
+  // if role=host is requested, return guestCandidates (host wants guest's candidates)
+  // if role=guest is requested, return hostCandidates (guest wants host's candidates)
+  const list = role === 'host' ? r.guestCandidates : r.hostCandidates;
+  console.log(`[Signaling] GET candidates for room ${roomId}, role=${role}, returning ${list.length} candidates`);
   // return and clear to avoid duplicates
   const out = [...list];
-  if (role === 'host') r.hostCandidates = [];
-  else r.guestCandidates = [];
+  if (role === 'host') r.guestCandidates = [];
+  else r.hostCandidates = [];
   res.json({ candidates: out });
+});
+
+// Debug endpoint to inspect room state
+router.get('/:roomId/debug', (req: Request, res: Response) => {
+  const { roomId } = req.params;
+  const r = rooms[roomId];
+  if (!r) {
+    return res.json({ error: 'Room not found', roomId });
+  }
+  res.json({
+    roomId,
+    hasOffer: !!r.offer,
+    hasAnswer: !!r.answer,
+    hostCandidatesCount: r.hostCandidates.length,
+    guestCandidatesCount: r.guestCandidates.length,
+    offer: r.offer,
+    answer: r.answer,
+  });
 });
 
 // End call / cleanup room signaling data
