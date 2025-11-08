@@ -456,9 +456,20 @@ function RoomPageContent() {
             signAndExecuteTransaction(
                 { transaction: txb },
                 {
-                    onSuccess: () => {
+                    onSuccess: async (result) => {
+                        // Optimistically update UI immediately
+                        const normalizedAddress = guestAddress.toLowerCase();
+                        if (!whitelist.some(item => item.address.toLowerCase() === normalizedAddress)) {
+                            setWhitelist([...whitelist, { address: guestAddress, addedAt: Date.now() }]);
+                        }
                         setSuccessMessage(`Guest ${guestAddress.slice(0, 8)}... approved`);
-                        loadRoomData(roomId);
+                        setNewAddress(''); // Clear input field
+                        setAddressError(''); // Clear any errors
+                        
+                        // Wait a bit for transaction to be indexed, then reload from blockchain
+                        setTimeout(async () => {
+                            await loadRoomData(roomId);
+                        }, 2000);
                     },
                     onError: (err) => {
                         console.error('Failed to approve guest:', err);
@@ -498,10 +509,15 @@ function RoomPageContent() {
             signAndExecuteTransaction(
                 { transaction: txb },
                 {
-                    onSuccess: () => {
-                        setSuccessMessage(`Guest ${guestAddress.slice(0, 8)}... revoked`);
+                    onSuccess: async () => {
+                        // Optimistically update UI immediately
                         removeFromWhitelist(guestAddress);
-                        loadRoomData(roomId);
+                        setSuccessMessage(`Guest ${guestAddress.slice(0, 8)}... revoked`);
+                        
+                        // Wait a bit for transaction to be indexed, then reload from blockchain
+                        setTimeout(async () => {
+                            await loadRoomData(roomId);
+                        }, 2000);
                     },
                     onError: (err) => {
                         console.error('Failed to revoke guest:', err);
@@ -559,9 +575,21 @@ function RoomPageContent() {
                     )}
 
                     {successMessage && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-                            <CheckIcon className="w-5 h-5 text-green-500 mt-0.5" />
-                            <p className="text-sm text-green-600">{successMessage}</p>
+                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                            <div className="flex items-start gap-3 mb-3">
+                                <CheckIcon className="w-5 h-5 text-green-500 mt-0.5" />
+                                <p className="text-sm text-green-600 flex-1">{successMessage}</p>
+                            </div>
+                            {roomId && (
+                                <div className="ml-8">
+                                    <button
+                                        onClick={() => router.push(`/room/${roomId}`)}
+                                        className="text-sm text-green-700 hover:text-green-900 font-medium underline"
+                                    >
+                                        View Room Details →
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -785,20 +813,44 @@ function RoomPageContent() {
                 <div className="max-w-4xl mx-auto">
                     {/* Header */}
                     <div className="mb-8">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            {roomData?.title ? new TextDecoder().decode(new Uint8Array(roomData.title)) : 'Meeting Room'}
-                        </h1>
-                        <p className="text-gray-600 flex items-center gap-2">
-                            <CheckIcon className="w-4 h-4 text-green-500" />
-                            Sealed and secured on Sui blockchain
-                        </p>
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                                    {roomData?.title ? new TextDecoder().decode(new Uint8Array(roomData.title)) : 'Meeting Room'}
+                                </h1>
+                                <p className="text-gray-600 flex items-center gap-2">
+                                    <CheckIcon className="w-4 h-4 text-green-500" />
+                                    Sealed and secured on Sui blockchain
+                                </p>
+                            </div>
+                            {roomId && (
+                                <button
+                                    onClick={() => router.push(`/room/${roomId}`)}
+                                    className="px-4 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all"
+                                >
+                                    View Details
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Success/Error Messages */}
                     {successMessage && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-                            <CheckIcon className="w-5 h-5 text-green-500 mt-0.5" />
-                            <p className="text-sm text-green-600">{successMessage}</p>
+                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                            <div className="flex items-start gap-3 mb-3">
+                                <CheckIcon className="w-5 h-5 text-green-500 mt-0.5" />
+                                <p className="text-sm text-green-600 flex-1">{successMessage}</p>
+                            </div>
+                            {roomId && (
+                                <div className="ml-8">
+                                    <button
+                                        onClick={() => router.push(`/room/${roomId}`)}
+                                        className="text-sm text-green-700 hover:text-green-900 font-medium underline"
+                                    >
+                                        View Room Details →
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -892,15 +944,23 @@ function RoomPageContent() {
                                     <input
                                         type="text"
                                         value={newAddress}
-                                        onChange={(e) => setNewAddress(e.target.value)}
+                                        onChange={(e) => {
+                                            setNewAddress(e.target.value);
+                                            setAddressError(''); // Clear error when user types
+                                        }}
                                         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                                         placeholder="0x123abc..."
                                     />
                                     <button
                                         onClick={() => {
-                                            if (validateSuiAddress(newAddress)) {
-                                                handleApproveGuest(newAddress.trim());
-                                                setNewAddress('');
+                                            const address = newAddress.trim();
+                                            if (validateSuiAddress(address)) {
+                                                // Check if already in whitelist
+                                                if (whitelist.some(item => item.address.toLowerCase() === address.toLowerCase())) {
+                                                    setAddressError('Address already in whitelist');
+                                                    return;
+                                                }
+                                                handleApproveGuest(address);
                                             }
                                         }}
                                         disabled={loading}

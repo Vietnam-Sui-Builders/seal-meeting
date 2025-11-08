@@ -190,7 +190,14 @@ export default function MyRoomsPage() {
                                         {/* Room Header */}
                                         <div className="flex justify-between items-start">
                                             <div className="flex flex-col gap-2 flex-1">
-                                                <h2 className="text-2xl font-bold text-gray-900">{room.title}</h2>
+                                                <button
+                                                    onClick={() => router.push(`/room/${room.onchainObjectId}`)}
+                                                    className="text-left"
+                                                >
+                                                    <h2 className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
+                                                        {room.title}
+                                                    </h2>
+                                                </button>
                                                 <div className="flex gap-3 items-center flex-wrap">
                                                     {room.requireApproval && (
                                                         <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
@@ -210,6 +217,15 @@ export default function MyRoomsPage() {
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
+                                                <button
+                                                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(`/room/${room.onchainObjectId}`);
+                                                    }}
+                                                >
+                                                    View Details
+                                                </button>
                                                 <button
                                                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                                                     onClick={(e) => {

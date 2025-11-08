@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import CallControls from '@/components/calling/CallControls';
 import VideoFeed from '@/components/calling/VideoFeed';
 import { useSearchParams } from 'next/navigation';
@@ -10,6 +10,8 @@ import ChatPanel, { ChatMessage } from '@/components/calling/ChatPanel';
 import ReactionsBar from '@/components/calling/ReactionsBar';
 import ScreenShareModal from '@/components/calling/ScreenShareModal';
 import { uploadToWalrus } from '@/lib/walrus';
+import { useSuiClient, useSignAndExecuteTransaction, useCurrentAccount } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -19,6 +21,13 @@ const CallingPage = () => {
   const searchParams = useSearchParams();
   const roomId = searchParams.get('roomId') || '';
   const role = (searchParams.get('role') as 'host' | 'guest') || 'guest';
+  const client = useSuiClient();
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+
+  const PACKAGE_ID = process.env.NEXT_PUBLIC_PACKAGE_ID || '';
+  const REGISTRY_OBJECT_ID = process.env.NEXT_PUBLIC_REGISTRY_ID || '';
+  const CLOCK_OBJECT_ID = '0x6';
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -40,11 +49,29 @@ const CallingPage = () => {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const [pcReady, setPcReady] = useState(false);
+  const [hostCapId, setHostCapId] = useState<string | null>(null);
+  const [chainBusy, setChainBusy] = useState(false);
+  const [chainStatus, setChainStatus] = useState<string | null>(null);
 
-  const pc = useMemo(() => new RTCPeerConnection({ iceServers: ICE_SERVERS }), []);
-
+  // Initialize RTCPeerConnection on client only
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
+    setPcReady(true);
+    return () => {
+      try { pc.close(); } catch {}
+      pcRef.current = null;
+      setPcReady(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Set up handlers when PC is ready
+  useEffect(() => {
+    const pc = pcRef.current;
+    if (!pc || !pcReady) return;
     pc.ontrack = (event) => {
       const stream = event.streams[0];
       setRemoteStream(stream);
@@ -72,19 +99,24 @@ const CallingPage = () => {
       pc.onicecandidate = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pc, roomId, role]);
+  }, [pcReady, roomId, role, audioEnabled, videoEnabled]);
 
   useEffect(() => {
     const setup = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
-        stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+        const pc = pcRef.current;
+        if (pc) {
+          stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+        }
         setParticipants([
           { id: 'you', name: 'You', role: role === 'host' ? 'host' : 'guest', audioMuted: !audioEnabled, videoMuted: !videoEnabled },
         ]);
 
         if (role === 'host') {
+          const pc = pcRef.current;
+          if (!pc) return;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           await apiClient.postOffer(roomId, JSON.stringify(offer));
@@ -98,19 +130,66 @@ const CallingPage = () => {
         console.error('Media or setup error', e);
       }
     };
-    setup();
+    if (pcReady) setup();
     return () => {
       stopPolling();
       endCall();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, role]);
+  }, [roomId, role, pcReady]);
 
   // meeting timer
   useEffect(() => {
     const intv = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     return () => clearInterval(intv);
   }, []);
+
+  // Locate HostCap owned by current account for this room
+  useEffect(() => {
+    const fetchHostCap = async () => {
+      try {
+        setChainStatus(null);
+        if (role !== 'host') return; // Only host needs HostCap
+        if (!currentAccount?.address) {
+          setChainStatus('Connect your wallet to manage meeting on-chain.');
+          return;
+        }
+        if (!PACKAGE_ID || !REGISTRY_OBJECT_ID) {
+          setChainStatus('Missing PACKAGE_ID or REGISTRY_OBJECT_ID. Configure env vars.');
+          return;
+        }
+        // List HostCap objects owned by the host
+        const caps = await client.getOwnedObjects({
+          owner: currentAccount.address,
+          filter: { StructType: `${PACKAGE_ID}::sealmeet::HostCap` },
+          options: { showType: true },
+        });
+        if (!caps.data.length) {
+          setChainStatus('No HostCap found. Create/join room as host first.');
+          return;
+        }
+        // Find the cap linked to this room by reading its fields
+        for (const o of caps.data) {
+          const id = (o.data as any)?.objectId || (o as any)?.objectId;
+          if (!id) continue;
+          const full = await client.getObject({ id, options: { showContent: true } });
+          const fields = (full.data as any)?.content?.fields;
+          const capRoomId = fields?.room_id;
+          if (typeof capRoomId === 'string' && capRoomId.toLowerCase() === roomId.toLowerCase()) {
+            setHostCapId(id);
+            setChainStatus('HostCap ready.');
+            return;
+          }
+        }
+        setChainStatus('HostCap for this room not found in your wallet.');
+      } catch (err) {
+        console.error('HostCap lookup failed', err);
+        setChainStatus('Failed to look up HostCap. Check console.');
+      }
+    };
+    fetchHostCap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, currentAccount?.address, PACKAGE_ID, REGISTRY_OBJECT_ID, roomId]);
 
   const startPolling = (target: 'offer' | 'answer') => {
     stopPolling();
@@ -120,6 +199,8 @@ const CallingPage = () => {
           const off = await apiClient.getOffer(roomId).catch(() => null);
           if (off?.sdp) {
             const offerDesc = JSON.parse(off.sdp);
+            const pc = pcRef.current;
+            if (!pc) return;
             await pc.setRemoteDescription(offerDesc);
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -132,6 +213,8 @@ const CallingPage = () => {
           const ans = await apiClient.getAnswer(roomId).catch(() => null);
           if (ans?.sdp) {
             const answerDesc = JSON.parse(ans.sdp);
+            const pc = pcRef.current;
+            if (!pc) return;
             await pc.setRemoteDescription(answerDesc);
             // start polling for remote candidates
             startCandidatePolling();
@@ -150,9 +233,10 @@ const CallingPage = () => {
     const intv = setInterval(async () => {
       try {
         const { candidates } = await apiClient.getCandidates(roomId, roleToGet);
+        const pc = pcRef.current;
         for (const c of candidates) {
           try {
-            await pc.addIceCandidate(c);
+            if (pc) await pc.addIceCandidate(c);
           } catch (err) {
             console.warn('Failed to add ICE candidate', err);
           }
@@ -220,7 +304,8 @@ const CallingPage = () => {
         } catch {}
       }
       setShareStream(displayStream);
-      displayStream.getTracks().forEach((t) => pc.addTrack(t, displayStream));
+      const pc = pcRef.current;
+      if (pc) displayStream.getTracks().forEach((t) => pc.addTrack(t, displayStream));
     } catch (e) {
       console.error('Screen share failed', e);
     }
@@ -294,6 +379,116 @@ const CallingPage = () => {
     }
   };
 
+  // On-chain: start_room
+  const startRoomOnChain = async () => {
+    if (chainBusy) return;
+    try {
+      setChainBusy(true);
+      setChainStatus(null);
+      if (role !== 'host') {
+        alert('Only host can start the room on-chain.');
+        return;
+      }
+      if (!currentAccount?.address) {
+        alert('Connect your wallet to call start_room.');
+        return;
+      }
+      if (!hostCapId) {
+        alert('HostCap not found for this room.');
+        return;
+      }
+      if (!PACKAGE_ID || !REGISTRY_OBJECT_ID) {
+        alert('Missing PACKAGE_ID or REGISTRY_OBJECT_ID env configuration.');
+        return;
+      }
+      const tx = new Transaction();
+      tx.setGasBudget(100_000_000);
+      tx.moveCall({
+        target: `${PACKAGE_ID}::sealmeet::start_room`,
+        arguments: [
+          tx.object(hostCapId),
+          tx.object(REGISTRY_OBJECT_ID),
+          tx.object(roomId),
+          tx.object(CLOCK_OBJECT_ID),
+        ],
+      });
+      await new Promise<void>((resolve, reject) => {
+        signAndExecuteTransaction(
+          { transaction: tx },
+          {
+            onSuccess: (res) => {
+              console.log('start_room success:', res);
+              setChainStatus('Room started on-chain.');
+              resolve();
+            },
+            onError: (err) => {
+              console.error('start_room failed:', err);
+              setChainStatus('start_room failed.');
+              reject(err);
+            },
+          }
+        );
+      });
+    } finally {
+      setChainBusy(false);
+    }
+  };
+
+  // On-chain: end_room
+  const endRoomOnChain = async () => {
+    if (chainBusy) return;
+    try {
+      setChainBusy(true);
+      setChainStatus(null);
+      if (role !== 'host') {
+        alert('Only host can end the room on-chain.');
+        return;
+      }
+      if (!currentAccount?.address) {
+        alert('Connect your wallet to call end_room.');
+        return;
+      }
+      if (!hostCapId) {
+        alert('HostCap not found for this room.');
+        return;
+      }
+      if (!PACKAGE_ID || !REGISTRY_OBJECT_ID) {
+        alert('Missing PACKAGE_ID or REGISTRY_OBJECT_ID env configuration.');
+        return;
+      }
+      const tx = new Transaction();
+      tx.setGasBudget(100_000_000);
+      tx.moveCall({
+        target: `${PACKAGE_ID}::sealmeet::end_room`,
+        arguments: [
+          tx.object(hostCapId),
+          tx.object(REGISTRY_OBJECT_ID),
+          tx.object(roomId),
+          tx.object(CLOCK_OBJECT_ID),
+        ],
+      });
+      await new Promise<void>((resolve, reject) => {
+        signAndExecuteTransaction(
+          { transaction: tx },
+          {
+            onSuccess: (res) => {
+              console.log('end_room success:', res);
+              setChainStatus('Room ended on-chain.');
+              resolve();
+            },
+            onError: (err) => {
+              console.error('end_room failed:', err);
+              setChainStatus('end_room failed.');
+              reject(err);
+            },
+          }
+        );
+      });
+    } finally {
+      setChainBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-950">
       <ConferenceHeader
@@ -330,6 +525,19 @@ const CallingPage = () => {
             setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, role: 'co-host' } : p)))
           }
           onAdmit={(id) => setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, inLobby: false } : p)))}
+          canManage={role === 'host'}
+          onAdd={(nameOrAddress) =>
+            setParticipants((prev) => [
+              ...prev,
+              {
+                id: `member-${Math.random().toString(36).slice(2)}`,
+                name: nameOrAddress,
+                role: 'guest',
+                audioMuted: false,
+                videoMuted: false,
+              },
+            ])
+          }
         />
         <ChatPanel
           isOpen={showChat}
@@ -428,8 +636,23 @@ const CallingPage = () => {
             <button onClick={() => setSpeakerView((v) => !v)} className="px-3 py-2 rounded bg-gray-700">
               {speakerView ? 'Speaker View' : 'Gallery View'}
             </button>
+            {role === 'host' && (
+              <>
+                <button onClick={startRoomOnChain} disabled={chainBusy || !hostCapId} className="px-3 py-2 rounded bg-green-700 disabled:opacity-50">
+                  Start On-Chain
+                </button>
+                <button onClick={endRoomOnChain} disabled={chainBusy || !hostCapId} className="px-3 py-2 rounded bg-yellow-700 disabled:opacity-50">
+                  End On-Chain
+                </button>
+              </>
+            )}
             <button onClick={endCall} className="px-3 py-2 rounded bg-red-700">{role === 'host' ? 'End Meeting for All' : 'Leave'}</button>
           </div>
+          {role === 'host' && chainStatus && (
+            <div className="text-xs text-gray-300 bg-gray-800/70 px-3 py-1 rounded">
+              {chainStatus}
+            </div>
+          )}
         </div>
 
         {/* Screen share modal */}
@@ -446,4 +669,18 @@ const CallingPage = () => {
   );
 };
 
-export default CallingPage;
+// Wrap component in Suspense for Next.js 15 useSearchParams requirement
+export default function CallingPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white">Loading meeting...</p>
+        </div>
+      </div>
+    }>
+      <CallingPage />
+    </Suspense>
+  );
+}
