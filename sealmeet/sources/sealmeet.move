@@ -526,3 +526,15 @@ public fun is_host(room: &MeetingRoom, addr: address): bool {
     vector::contains(&room.hosts, &addr)
 }
 
+// ========== Test-only Functions ==========
+
+#[test_only]
+public fun test_init(ctx: &mut tx_context::TxContext) {
+    let otw = SEALMEET {};
+    init(otw, ctx);
+}
+
+#[test_only]
+public fun room_count(registry: &RoomRegistry): u64 {
+    registry.room_count
+}
