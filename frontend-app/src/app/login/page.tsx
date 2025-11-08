@@ -4,8 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftIcon, GlobeIcon, CardStackIcon, UpdateIcon, LockClosedIcon, LightningBoltIcon, ExclamationTriangleIcon, FrameIcon } from '@radix-ui/react-icons';
-import { ConnectButton, ConnectModal, useCurrentAccount, useWallets } from '@mysten/dapp-kit';
+import { ArrowLeftIcon, GlobeIcon, LockClosedIcon, LightningBoltIcon, FrameIcon } from '@radix-ui/react-icons';
+import { ConnectModal, useCurrentAccount } from '@mysten/dapp-kit';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
@@ -14,18 +14,23 @@ export default function LoginPage() {
     const router = useRouter();
 
     const currentAccount = useCurrentAccount();
-    const wallets = useWallets();
-    const { loginWithZkLogin, isAuthenticated } = useAuth();
+    const { loginWithZkLogin, isAuthenticated, authenticateWallet, isAuthenticating, authError, accessToken } = useAuth();
 
-    // Check if wallets are available
-    const hasWallets = wallets && wallets.length > 0;
-
-    // Redirect to room creation after wallet connection
+    // Authenticate wallet after connection
     useEffect(() => {
-        if (currentAccount) {
-            router.push('/room');
-        }
-    }, [currentAccount, router]);
+        const handleWalletAuthentication = async () => {
+            if (currentAccount && !accessToken && !isAuthenticating) {
+                console.log('Wallet connected, authenticating...');
+                const success = await authenticateWallet();
+                if (success) {
+                    console.log('Wallet authenticated successfully');
+                    router.push('/room');
+                }
+            }
+        };
+
+        handleWalletAuthentication();
+    }, [currentAccount, accessToken, isAuthenticating, authenticateWallet, router]);
 
     // Also redirect if already authenticated
     useEffect(() => {
@@ -42,6 +47,13 @@ export default function LoginPage() {
             console.error(err);
         }
     };
+
+    // Update error display when auth error changes
+    useEffect(() => {
+        if (authError) {
+            setError(authError);
+        }
+    }, [authError]);
 
     return (
         <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
@@ -94,13 +106,13 @@ export default function LoginPage() {
                         {/* Wallet Connect Button */}
                         <ConnectModal
                             trigger={
-                                <button className="w-full">
+                                <button className="w-full" disabled={isAuthenticating}>
                                     <div className="w-full items-center flex justify-center border-2 border-gray-600 rounded-xl p-4 bg-gray-700 hover:bg-gray-600 transition-colors gap-4">
                                         <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center group-hover:bg-red-100 transition-colors">
                                             <FrameIcon className="w-6 h-6 text-red-500" />
                                         </div>
                                         <div className="text-white">
-                                            Connect Wallet
+                                            {isAuthenticating ? 'Authenticating...' : 'Connect Wallet'}
                                         </div>
                                     </div>
                                 </button>

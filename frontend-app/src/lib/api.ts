@@ -74,6 +74,24 @@ interface GetMyRoomsResponse {
   rooms: RoomListItem[];
 }
 
+interface NonceResponse {
+  nonce: string;
+  expiresAt: string;
+}
+
+interface VerifyResponse {
+  accessToken: string;
+  refreshToken: string;
+  session: {
+    id: string;
+    expiresAt: string;
+  };
+  user: {
+    id: string;
+    walletAddress: string;
+  };
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -153,6 +171,27 @@ class ApiClient {
 
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
     return this.request('/health');
+  }
+
+  // Authentication API
+  async getNonce(walletAddress: string): Promise<NonceResponse> {
+    return this.request<NonceResponse>('/auth/nonce', 'POST', { walletAddress });
+  }
+
+  async verifySignature(
+    walletAddress: string,
+    signature: string,
+    walletType?: string
+  ): Promise<VerifyResponse> {
+    return this.request<VerifyResponse>('/auth/verify', 'POST', {
+      walletAddress,
+      signature,
+      walletType,
+    });
+  }
+
+  async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
+    return this.request<{ accessToken: string }>('/auth/refresh', 'POST', { refreshToken });
   }
 
   // Signaling API (development-only, in-memory)

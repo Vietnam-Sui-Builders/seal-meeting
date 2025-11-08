@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useCurrentAccount, useDisconnectWallet, useSuiClientQuery } from '@mysten/dapp-kit';
 import { initiateZkLogin, DecodedJwt } from '@/lib/zkLogin';
+import { useAuth as useWalletAuth } from '@/hooks/useAuth';
 
 export type AuthMethod = 'wallet' | 'zklogin' | null;
 
@@ -13,10 +14,16 @@ interface AuthContextType {
     address: string | null;
     balance: string | null;
     authMethod: AuthMethod;
-    
+
     // User info (for zkLogin)
     user: DecodedJwt | null;
-    
+
+    // Wallet authentication
+    accessToken: string | null;
+    isAuthenticating: boolean;
+    authError: string | null;
+    authenticateWallet: () => Promise<boolean>;
+
     // Actions
     loginWithZkLogin: () => void;
     disconnect: () => void;
@@ -30,6 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [zkUser, setZkUser] = useState<DecodedJwt | null>(null);
     const [zkAddress, setZkAddress] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
+
+    // Use the wallet authentication hook
+    const {
+        accessToken,
+        loading: isAuthenticating,
+        error: authError,
+        isAuthenticated: isWalletAuthenticated,
+        authenticate,
+        logout: logoutWallet,
+    } = useWalletAuth();
 
     // Determine which auth method is active
     const authMethod: AuthMethod = walletAccount 
@@ -100,12 +117,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initiateZkLogin();
     };
 
+    const authenticateWallet = async (): Promise<boolean> => {
+        return await authenticate();
+    };
+
     const disconnect = () => {
         // Disconnect wallet if connected
         if (walletAccount) {
             disconnectWallet();
         }
-        
+
+        // Logout wallet authentication
+        logoutWallet();
+
         // Clear zkLogin data
         setZkUser(null);
         setZkAddress(null);
@@ -113,10 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('zkLoginAddress');
     };
 
-    const isAuthenticated = !!address;
+    const isAuthenticated = !!address || isWalletAuthenticated;
 
     return (
-        <AuthContext.Provider 
+        <AuthContext.Provider
             value={{
                 isAuthenticated,
                 isConnecting,
@@ -124,6 +148,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 balance,
                 authMethod,
                 user: zkUser,
+                accessToken,
+                isAuthenticating,
+                authError,
+                authenticateWallet,
                 loginWithZkLogin,
                 disconnect,
             }}
