@@ -17,16 +17,23 @@ import {
 import { apiClient } from '@/lib/api';
 
 interface RoomListItem {
-    id: string;
-    onchainObjectId: string;
+    roomId: string;
     title: string;
+    hosts: string[];
+    status: 'scheduled' | 'active' | 'ended';
+    maxParticipants: number;
     requireApproval: boolean;
-    attendanceCount: number;
-    memberCount: number;
+    participantCount: number;
+    sealPolicyId: string;
+    createdAt: string | null;
+    startedAt: string | null;
+    endedAt: string | null;
+    transactionDigest: string;
+    language?: string;
+    timezone?: string;
+    recordingBlobId?: string;
     pendingApprovals: number;
-    createdAt: string;
-    startTime: string | null;
-    endTime: string | null;
+    userRole: 'HOST' | 'PARTICIPANT' | null;
 }
 
 export default function MyRoomsPage() {
@@ -84,12 +91,12 @@ export default function MyRoomsPage() {
         });
     };
 
-    const getInviteLink = (onchainObjectId: string) => {
-        return `${window.location.origin}/room/join?roomId=${onchainObjectId}`;
+    const getInviteLink = (roomId: string) => {
+        return `${window.location.origin}/room/join?roomId=${roomId}`;
     };
 
-    const viewOnExplorer = (objectId: string) => {
-        window.open(`https://suiexplorer.com/object/${objectId}?network=testnet`, '_blank');
+    const viewOnExplorer = (roomId: string) => {
+        window.open(`https://suiexplorer.com/object/${roomId}?network=testnet`, '_blank');
     };
 
     if (!currentAccount) {
@@ -181,17 +188,17 @@ export default function MyRoomsPage() {
                 {!loading && rooms.length > 0 && (
                     <div className="flex flex-col gap-4">
                         {rooms.map((room) => {
-                            const inviteLink = getInviteLink(room.onchainObjectId);
-                            const isCopied = copiedId === room.onchainObjectId;
+                            const inviteLink = getInviteLink(room.roomId);
+                            const isCopied = copiedId === room.roomId;
 
                             return (
-                                <div key={room.id} className="bg-white rounded-xl shadow-lg p-6">
+                                <div key={room.roomId} className="bg-white rounded-xl shadow-lg p-6">
                                     <div className="flex flex-col gap-4">
                                         {/* Room Header */}
                                         <div className="flex justify-between items-start">
                                             <div className="flex flex-col gap-2 flex-1">
                                                 <button
-                                                    onClick={() => router.push(`/room/${room.onchainObjectId}`)}
+                                                    onClick={() => router.push(`/room/${room.roomId}`)}
                                                     className="text-left"
                                                 >
                                                     <h2 className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
@@ -221,7 +228,7 @@ export default function MyRoomsPage() {
                                                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        router.push(`/room/${room.onchainObjectId}`);
+                                                        router.push(`/room/${room.roomId}`);
                                                     }}
                                                 >
                                                     View Details
@@ -230,7 +237,7 @@ export default function MyRoomsPage() {
                                                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        viewOnExplorer(room.onchainObjectId);
+                                                        viewOnExplorer(room.roomId);
                                                     }}
                                                 >
                                                     <ExternalLinkIcon width="14" height="14" />
@@ -240,7 +247,7 @@ export default function MyRoomsPage() {
                                                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        router.push(`/calling?roomId=${room.onchainObjectId}&role=host`);
+                                                        router.push(`/calling?roomId=${room.roomId}&role=host`);
                                                     }}
                                                 >
                                                     <ArrowRightIcon width="14" height="14" />
@@ -256,20 +263,20 @@ export default function MyRoomsPage() {
                                             <div className="flex gap-2 items-center">
                                                 <PersonIcon width="16" height="16" className="text-gray-400" />
                                                 <span className="text-sm text-gray-600">
-                                                    {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
+                                                    {room.participantCount} {room.participantCount === 1 ? 'member' : 'members'}
                                                 </span>
                                             </div>
                                             <div className="flex gap-2 items-center">
                                                 <ClockIcon width="16" height="16" className="text-gray-400" />
                                                 <span className="text-sm text-gray-600">
-                                                    Created {formatDate(room.createdAt)}
+                                                    Created {room.createdAt ? formatDate(room.createdAt) : 'N/A'}
                                                 </span>
                                             </div>
-                                            {room.startTime && (
+                                            {room.startedAt && (
                                                 <div className="flex gap-2 items-center">
                                                     <CalendarIcon width="16" height="16" className="text-gray-400" />
                                                     <span className="text-sm text-gray-600">
-                                                        Starts: {formatDate(room.startTime)}
+                                                        Started: {formatDate(room.startedAt)}
                                                     </span>
                                                 </div>
                                             )}
@@ -287,13 +294,13 @@ export default function MyRoomsPage() {
                                                     <span
                                                         className="text-xs font-mono break-all flex-1 text-gray-700"
                                                     >
-                                                        {room.onchainObjectId}
+                                                        {room.roomId}
                                                     </span>
                                                     <button
                                                         className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            copyToClipboard(room.onchainObjectId, room.onchainObjectId);
+                                                            copyToClipboard(room.roomId, room.roomId);
                                                         }}
                                                     >
                                                         {isCopied ? (
@@ -318,7 +325,7 @@ export default function MyRoomsPage() {
                                                         className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            copyToClipboard(inviteLink, room.onchainObjectId);
+                                                            copyToClipboard(inviteLink, room.roomId);
                                                         }}
                                                     >
                                                         {isCopied ? (

@@ -229,7 +229,8 @@ const CallingPage = () => {
 
   const startCandidatePolling = () => {
     // Poll for remote ICE candidates (role receives the other side's)
-    const roleToGet = role === 'host' ? 'host' : 'guest';
+    // If you're a host, get guest candidates. If you're guest, get host candidates.
+    const roleToGet = role === 'host' ? 'guest' : 'host';
     const intv = setInterval(async () => {
       try {
         const { candidates } = await apiClient.getCandidates(roomId, roleToGet);

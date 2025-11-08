@@ -58,16 +58,26 @@ interface ApproveGuestResponse {
 }
 
 interface RoomListItem {
-  id: string;
-  onchainObjectId: string;
+  roomId: string;
   title: string;
+  hosts: string[];
+  status: 'scheduled' | 'active' | 'ended';
+  maxParticipants: number;
   requireApproval: boolean;
-  attendanceCount: number;
-  memberCount: number;
+  participantCount: number;
+  sealPolicyId: string;
+  createdAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  transactionDigest: string;
+  // Metadata
+  language?: string;
+  timezone?: string;
+  recordingBlobId?: string;
+  // Backend data
   pendingApprovals: number;
-  createdAt: string;
-  startTime: string | null;
-  endTime: string | null;
+  // User's role in this room
+  userRole: 'HOST' | 'PARTICIPANT' | null;
 }
 
 interface GetMyRoomsResponse {

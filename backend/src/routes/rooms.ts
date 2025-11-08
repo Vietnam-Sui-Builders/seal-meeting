@@ -32,11 +32,25 @@ router.get("/", async (req: Request, res: Response) => {
     // Build filter
     const where: any = {};
 
-    // Filter by host (if walletAddress provided)
+    // Filter by host OR participant (if walletAddress provided)
     if (walletAddress && typeof walletAddress === "string") {
-      where.hosts = {
-        has: walletAddress, // Check if walletAddress is in hosts array
-      };
+      // Get rooms where user is either:
+      // 1. A host (in the hosts array), OR
+      // 2. A participant (in the participants relation)
+      where.OR = [
+        {
+          hosts: {
+            has: walletAddress, // Check if walletAddress is in hosts array
+          },
+        },
+        {
+          participants: {
+            some: {
+              participantAddress: walletAddress,
+            },
+          },
+        },
+      ];
     }
 
     // Filter by status (1=scheduled, 2=active, 3=ended)
@@ -72,26 +86,47 @@ router.get("/", async (req: Request, res: Response) => {
     });
 
     res.json({
-      rooms: meetingRooms.map((room) => ({
-        roomId: room.roomId,
-        title: room.title,
-        hosts: room.hosts,
-        status: getRoomStatus(room.status),
-        maxParticipants: Number(room.maxParticipants),
-        requireApproval: room.requireApproval,
-        participantCount: room.participantCount,
-        sealPolicyId: room.sealPolicyId,
-        createdAt: unixToDate(room.createdAt),
-        startedAt: unixToDate(room.startedAt),
-        endedAt: unixToDate(room.endedAt),
-        transactionDigest: room.transactionDigest,
-        // Metadata
-        language: room.metadata?.language,
-        timezone: room.metadata?.timezone,
-        recordingBlobId: room.metadata?.recordingBlobId?.toString(),
-        // Backend data
-        pendingApprovals: room.approvals.length,
-      })),
+      rooms: meetingRooms.map((room) => {
+        // Determine user's role in this room
+        let userRole: "HOST" | "PARTICIPANT" | null = null;
+        if (walletAddress && typeof walletAddress === "string") {
+          // Check if user is in hosts array
+          if (room.hosts.includes(walletAddress)) {
+            userRole = "HOST";
+          } else {
+            // Check if user is in participants
+            const participant = room.participants.find(
+              (p) => p.participantAddress === walletAddress
+            );
+            if (participant) {
+              userRole = participant.role as "HOST" | "PARTICIPANT";
+            }
+          }
+        }
+
+        return {
+          roomId: room.roomId,
+          title: room.title,
+          hosts: room.hosts,
+          status: getRoomStatus(room.status),
+          maxParticipants: Number(room.maxParticipants),
+          requireApproval: room.requireApproval,
+          participantCount: room.participantCount,
+          sealPolicyId: room.sealPolicyId,
+          createdAt: unixToDate(room.createdAt),
+          startedAt: unixToDate(room.startedAt),
+          endedAt: unixToDate(room.endedAt),
+          transactionDigest: room.transactionDigest,
+          // Metadata
+          language: room.metadata?.language,
+          timezone: room.metadata?.timezone,
+          recordingBlobId: room.metadata?.recordingBlobId?.toString(),
+          // Backend data
+          pendingApprovals: room.approvals.length,
+          // User's role in this room
+          userRole,
+        };
+      }),
     });
   } catch (error) {
     console.error("Error fetching rooms:", error);
