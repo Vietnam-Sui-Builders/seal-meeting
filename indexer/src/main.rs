@@ -1,4 +1,4 @@
-// SuiMeet Indexer - Meeting Room Event Indexer
+// SealMeet Indexer - Meeting Room Event Indexer
 
 use clap::{Parser, Args as ClapArgs};
 use sui_indexer_alt_framework::{
@@ -8,7 +8,7 @@ use sui_indexer_alt_framework::{
     Result,
 };
 use url::Url;
-use suimeet_indexer::{
+use sealmeet_indexer::{
     processors::{RoomProcessor, MetadataProcessor},
     MIGRATIONS,
 };
@@ -41,8 +41,8 @@ impl From<IngestionArgs> for IngestionConfig {
 
 #[derive(Parser, Debug)]
 #[clap(
-    name = "suimeet-indexer",
-    about = "Sequential pipeline indexer for SuiMeet meeting rooms using Sui Custom Indexing Framework",
+    name = "sealmeet-indexer",
+    about = "Sequential pipeline indexer for SealMeet meeting rooms using Sui Custom Indexing Framework",
     version
 )]
 struct Args {
@@ -50,9 +50,9 @@ struct Args {
     #[clap(long, env = "DATABASE_URL")]
     database_url: Url,
 
-    /// SuiMeet package ID on Sui
-    #[clap(long, env = "SUIMEET_PACKAGE_ID")]
-    suimeet_package_id: String,
+    /// SealMeet package ID on Sui
+    #[clap(long, env = "PACKAGE_ID")]
+    package_id: String,
 
     #[clap(flatten)]
     cluster_args: cluster::Args,
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
 
     let Args {
         database_url,
-        suimeet_package_id,
+        package_id,
         cluster_args,
         ingestion_args,
     } = Args::parse();
@@ -83,14 +83,14 @@ async fn main() -> Result<()> {
         .await?;
 
     // Create and register room processor
-    let room_processor = RoomProcessor::new(suimeet_package_id.clone())?;
+    let room_processor = RoomProcessor::new(package_id.clone())?;
 
     indexer
         .sequential_pipeline(room_processor, SequentialConfig::default())
         .await?;
 
     // Create and register metadata processor
-    let metadata_processor = MetadataProcessor::new(suimeet_package_id)?;
+    let metadata_processor = MetadataProcessor::new(package_id)?;
 
     indexer
         .sequential_pipeline(metadata_processor, SequentialConfig::default())

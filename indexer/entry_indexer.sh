@@ -2,24 +2,14 @@
 
 # Export logging configuration
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
-export RUST_LOG="${RUST_LOG:-info,smashblob_indexer_alt=debug}"
+export RUST_LOG="${RUST_LOG:-info,sealmeet_indexer=debug}"
 
 # Build command with all required arguments
-CMD="/opt/mysten/bin/smashblob-indexer-alt"
+CMD="/opt/mysten/bin/sealmeet-indexer"
 
 # Required arguments
 CMD="$CMD --database-url \"$DATABASE_URL\""
-CMD="$CMD --game-package-id \"$GAME_PACKAGE_ID\""
-CMD="$CMD --winners-object-id \"$WINNERS_OBJECT_ID\""
-CMD="$CMD --garbage-object-id \"$GARBAGE_OBJECT_ID\""
-CMD="$CMD --game-object-id \"$GAME_OBJECT_ID\""
-
-# Dynamic field type tags
-CMD="$CMD --winners-post-type \"$WINNERS_POST_TYPE\""
-CMD="$CMD --winners-prompt-type \"$WINNERS_PROMPT_TYPE\""
-CMD="$CMD --winners-treasury-type \"$WINNERS_TREASURY_TYPE\""
-CMD="$CMD --garbage-epoch-record-type \"$GARBAGE_EPOCH_RECORD_TYPE\""
-CMD="$CMD --treasury-balance-type \"$TREASURY_BALANCE_TYPE\""
+CMD="$CMD --package-id \"$PACKAGE_ID\""
 
 # Ingestion configuration (with defaults)
 CMD="$CMD --checkpoint-buffer-size ${CHECKPOINT_BUFFER_SIZE:-5000}"
@@ -45,12 +35,9 @@ fi
 [ -n "$FIRST_CHECKPOINT" ] && CMD="$CMD --first-checkpoint $FIRST_CHECKPOINT"
 [ -n "$LAST_CHECKPOINT" ] && CMD="$CMD --last-checkpoint $LAST_CHECKPOINT"
 
-echo "Starting SmashBlob Indexer with configuration:"
+echo "Starting SealMeet Indexer with configuration:"
 echo "DATABASE_URL: ${DATABASE_URL%%@*}@***"
-echo "GAME_PACKAGE_ID: $GAME_PACKAGE_ID"
-echo "GAME_OBJECT_ID: $GAME_OBJECT_ID"
-echo "WINNERS_OBJECT_ID: $WINNERS_OBJECT_ID"
-echo "GARBAGE_OBJECT_ID: $GARBAGE_OBJECT_ID"
+echo "PACKAGE_ID: $PACKAGE_ID"
 echo "REMOTE_STORE_URL: $REMOTE_STORE_URL"
 echo "CHECKPOINT_BUFFER_SIZE: ${CHECKPOINT_BUFFER_SIZE:-5000}"
 echo "INGEST_CONCURRENCY: ${INGEST_CONCURRENCY:-200}"

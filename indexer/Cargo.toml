@@ -1,9 +1,9 @@
 [package]
-name = "suimeet-indexer"
+name = "sealmeet-indexer"
 version = "0.1.0"
 edition = "2021"
-authors = ["SuiMeet Team"]
-description = "Sequential pipeline indexer for SuiMeet meeting rooms using Sui Custom Indexing Framework"
+authors = ["SealMeet Team"]
+description = "Sequential pipeline indexer for SealMeet meeting rooms using Sui Custom Indexing Framework"
 
 [dependencies]
 sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", rev = "83e72a664e8853ecc316efd70a62762a07d04177" }
